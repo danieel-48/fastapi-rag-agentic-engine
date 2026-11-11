@@ -1,0 +1,39 @@
+version: "3.8"
+
+services:
+  # 1. Base de datos PostgreSQL con extensión pgvector
+  postgres-db:
+    image: pgvector/pgvector:pg16
+    container_name: pgvector-container
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: rag_enterprise
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d rag_enterprise"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 2. Tu API de FastAPI con RAG y Agentes
+  ai-api:
+    build: .
+    container_name: ai-api-container
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      # IMPORTANTE: Dentro de la red de Docker, el host de la BD es el nombre del servicio ('postgres-db'), NO localhost
+      - DATABASE_URL=postgresql+psycopg2://postgres:postgres@postgres-db:5432/rag_enterprise
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
